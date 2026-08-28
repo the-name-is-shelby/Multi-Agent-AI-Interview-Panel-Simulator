@@ -2,9 +2,13 @@
 import google.generativeai as genai
 import json
 import os
+import warnings
 from pathlib import Path
 from pypdf import PdfReader
 from dotenv import load_dotenv
+
+# Suppress deprecation warning noise
+warnings.filterwarnings("ignore")
 
 # Load local environment variables (.env)
 load_dotenv()
@@ -37,8 +41,6 @@ def get_api_key():
         pass
     return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
 
-API_KEY = get_api_key()
-
 # Extract PDF text helper
 def extract_pdf(uploaded_file):
     if uploaded_file is None:
@@ -50,28 +52,33 @@ def extract_pdf(uploaded_file):
         st.error(f"Error reading PDF: {e}")
         return ""
 
-# LLM Caller with fallback
-def call_gemini(prompt: str, model_name: str = "gemini-2.5-flash") -> str:
+# LLM Caller with guaranteed working models
+SUPPORTED_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-flash-latest",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-pro",
+    "gemini-flash-lite-latest"
+]
+
+def call_gemini(prompt: str) -> str:
     key = get_api_key()
     if not key:
-        raise ValueError("API Key is missing from secrets/environment.")
+        raise ValueError("API Key not found in Streamlit secrets or environment variables.")
     genai.configure(api_key=key)
     
-    fallbacks = [model_name, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
-    seen = set()
     last_err = None
-    for m in fallbacks:
-        if m in seen:
-            continue
-        seen.add(m)
+    for model_name in SUPPORTED_MODELS:
         try:
-            model = genai.GenerativeModel(m)
+            model = genai.GenerativeModel(model_name)
             res = model.generate_content(prompt)
             if res and res.text:
                 return res.text
         except Exception as e:
             last_err = e
             continue
+            
     raise RuntimeError(f"Error from Gemini API: {last_err}")
 
 # Personas
@@ -198,7 +205,7 @@ Provide:
 st.title("Multi-Agent AI Interview Panel Simulator")
 st.caption("Autonomous hiring panel simulator with blind evaluations, adversarial multi-agent debate, evidence weighting, and candidate comparison.")
 
-# Sidebar for sample loader only
+# Sidebar
 with st.sidebar:
     st.header("Actions")
     if st.button("Load Hackathon Sample Files", use_container_width=True):
