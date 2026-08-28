@@ -6,7 +6,7 @@ from pathlib import Path
 from pypdf import PdfReader
 from dotenv import load_dotenv
 
-# Load local environment variables
+# Load environment variables
 load_dotenv()
 
 st.set_page_config(
@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Helper to load sample files
+# Helper to load sample files on explicit request
 def load_sample_file(filename):
     path = Path("sample_data") / filename
     if path.exists():
@@ -25,14 +25,6 @@ def load_sample_file(filename):
         except Exception:
             return ""
     return ""
-
-# Auto-populate sample data defaults
-if "jd_text" not in st.session_state:
-    st.session_state["jd_text"] = load_sample_file("02_Job_Description.pdf")
-    st.session_state["ra_text"] = load_sample_file("03_Resume_A.pdf")
-    st.session_state["ta_text"] = load_sample_file("05_Transcript_A.pdf")
-    st.session_state["rb_text"] = load_sample_file("04_Resume_B.pdf")
-    st.session_state["tb_text"] = load_sample_file("06_Transcript_B.pdf")
 
 # Detect API Key from secrets or env
 def get_env_key():
@@ -50,16 +42,17 @@ env_key = get_env_key()
 # Sidebar
 with st.sidebar:
     st.header("Configuration")
-    api_key = st.text_input("Gemini API Key", value=env_key, type="password", help="Loaded from secrets/.env if available.")
+    api_key = st.text_input("Gemini API Key", value=env_key, type="password", help="Loaded automatically from secrets or .env if available.")
     model_name = st.selectbox("Model", ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"], index=0)
     
     st.markdown("---")
-    if st.button("Reload Hackathon Sample Files", use_container_width=True):
-        st.session_state["jd_text"] = load_sample_file("02_Job_Description.pdf")
-        st.session_state["ra_text"] = load_sample_file("03_Resume_A.pdf")
-        st.session_state["ta_text"] = load_sample_file("05_Transcript_A.pdf")
-        st.session_state["rb_text"] = load_sample_file("04_Resume_B.pdf")
-        st.session_state["tb_text"] = load_sample_file("06_Transcript_B.pdf")
+    st.subheader("Sample Data")
+    if st.button("Load Official Sample Dataset", use_container_width=True):
+        st.session_state["jd_input"] = load_sample_file("02_Job_Description.pdf")
+        st.session_state["ra_input"] = load_sample_file("03_Resume_A.pdf")
+        st.session_state["ta_input"] = load_sample_file("05_Transcript_A.pdf")
+        st.session_state["rb_input"] = load_sample_file("04_Resume_B.pdf")
+        st.session_state["tb_input"] = load_sample_file("06_Transcript_B.pdf")
         st.rerun()
 
 # Extract PDF helper
@@ -114,7 +107,7 @@ def run_panel_for_candidate(name, jd, resume, transcript, model_choice, key):
     st.markdown(f"## Candidate {name} Evaluation")
     
     # 1. Candidate Profile Builder
-    with st.spinner(f"Step 1: Candidate Profile Builder ({name})..."):
+    with st.spinner(f"Step 1: Building Candidate Profile for {name}..."):
         profile_prompt = f"""Extract a structured, factual candidate profile from the resume and transcript for the job description.
 Job Description: {jd}
 Resume: {resume}
@@ -215,53 +208,55 @@ Provide:
         comparison = call_gemini(comp_prompt, model_choice, key)
     st.markdown(comparison)
 
-# ----------------- UI Layout ----------------- #
+# ----------------- Main Page ----------------- #
 
 st.title("Multi-Agent AI Interview Panel Simulator")
 st.caption("Autonomous hiring panel simulator with blind evaluations, adversarial multi-agent debate, evidence weighting, and candidate comparison.")
 
-tab_inputs, tab_run = st.tabs(["1. Input Documents (Pre-Loaded)", "2. Run Panel Simulation"])
+# Inputs Section
+st.subheader("Job Description")
+jd_upload = st.file_uploader("Upload Job Description PDF", type=["pdf"], key="jd_up")
+jd_val = extract_pdf(jd_upload) or st.text_area("Job Description Text", value=st.session_state.get("jd_input", ""), height=120, placeholder="Paste Job Description or upload PDF above...")
 
-with tab_inputs:
-    st.subheader("Job Description")
-    jd_upload = st.file_uploader("Upload Job Description PDF (Optional)", type=["pdf"], key="jd_up")
-    jd_val = extract_pdf(jd_upload) or st.text_area("Job Description", value=st.session_state.get("jd_text", ""), height=130)
+st.markdown("---")
+col_a, col_b = st.columns(2)
 
-    st.markdown("---")
-    col_a, col_b = st.columns(2)
+with col_a:
+    st.subheader("Candidate A")
+    ra_up = st.file_uploader("Resume A (PDF)", type=["pdf"], key="ra_up")
+    ra_val = extract_pdf(ra_up) or st.text_area("Resume A Text", value=st.session_state.get("ra_input", ""), height=100, placeholder="Paste Resume A...")
     
-    with col_a:
-        st.subheader("Candidate A")
-        ra_up = st.file_uploader("Resume A PDF (Optional)", type=["pdf"], key="ra_up")
-        ra_val = extract_pdf(ra_up) or st.text_area("Resume A", value=st.session_state.get("ra_text", ""), height=110)
-        
-        ta_up = st.file_uploader("Transcript A PDF (Optional)", type=["pdf"], key="ta_up")
-        ta_val = extract_pdf(ta_up) or st.text_area("Transcript A", value=st.session_state.get("ta_text", ""), height=130)
+    ta_up = st.file_uploader("Transcript A (PDF)", type=["pdf"], key="ta_up")
+    ta_val = extract_pdf(ta_up) or st.text_area("Transcript A Text", value=st.session_state.get("ta_input", ""), height=120, placeholder="Paste Transcript A...")
 
-    with col_b:
-        st.subheader("Candidate B")
-        rb_up = st.file_uploader("Resume B PDF (Optional)", type=["pdf"], key="rb_up")
-        rb_val = extract_pdf(rb_up) or st.text_area("Resume B", value=st.session_state.get("rb_text", ""), height=110)
-        
-        tb_up = st.file_uploader("Transcript B PDF (Optional)", type=["pdf"], key="tb_up")
-        tb_val = extract_pdf(tb_up) or st.text_area("Transcript B", value=st.session_state.get("tb_text", ""), height=130)
+with col_b:
+    st.subheader("Candidate B")
+    rb_up = st.file_uploader("Resume B (PDF)", type=["pdf"], key="rb_up")
+    rb_val = extract_pdf(rb_up) or st.text_area("Resume B Text", value=st.session_state.get("rb_input", ""), height=100, placeholder="Paste Resume B...")
+    
+    tb_up = st.file_uploader("Transcript B (PDF)", type=["pdf"], key="tb_up")
+    tb_val = extract_pdf(tb_up) or st.text_area("Transcript B Text", value=st.session_state.get("tb_input", ""), height=120, placeholder="Paste Transcript B...")
 
-with tab_run:
-    st.subheader("Execute Multi-Agent Panel")
-    if st.button("Start Multi-Agent Panel Evaluation (Candidates A & B)", type="primary", use_container_width=True):
-        if not api_key:
-            st.error("Please enter a Gemini API Key in the sidebar or set GEMINI_API_KEY in Streamlit Secrets.")
-        elif not jd_val or not ra_val or not ta_val:
-            st.error("Please ensure Job Description and Candidate A documents are provided.")
-        else:
-            try:
-                res_a = run_panel_for_candidate("A", jd_val, ra_val, ta_val, model_name, api_key)
+st.markdown("---")
+
+# Execution Button right on the page
+if st.button("Run Multi-Agent Panel Evaluation", type="primary", use_container_width=True):
+    if not api_key:
+        st.error("Please enter a Gemini API Key in the sidebar or set GEMINI_API_KEY in Streamlit Secrets.")
+    elif not jd_val or not ra_val or not ta_val:
+        st.error("Please ensure the Job Description and Candidate A materials (Resume + Transcript) are provided.")
+    else:
+        try:
+            st.markdown("---")
+            res_a = run_panel_for_candidate("A", jd_val, ra_val, ta_val, model_name, api_key)
+            
+            if rb_val and tb_val:
                 st.markdown("---")
-                if rb_val and tb_val:
-                    res_b = run_panel_for_candidate("B", jd_val, rb_val, tb_val, model_name, api_key)
-                    st.markdown("---")
-                    run_comparison(res_a, res_b, jd_val, model_name, api_key)
-                st.balloons()
-                st.success("Full Multi-Agent Panel Evaluation Complete!")
-            except Exception as e:
-                st.error(f"Error running panel: {e}")
+                res_b = run_panel_for_candidate("B", jd_val, rb_val, tb_val, model_name, api_key)
+                st.markdown("---")
+                run_comparison(res_a, res_b, jd_val, model_name, api_key)
+                
+            st.balloons()
+            st.success("Evaluation Completed Successfully!")
+        except Exception as e:
+            st.error(f"Error during execution: {e}")
