@@ -6,7 +6,7 @@ from pathlib import Path
 from pypdf import PdfReader
 from dotenv import load_dotenv
 
-# Load local environment variables if present
+# Load local environment variables from .env if present
 load_dotenv()
 
 # Streamlit Page Config
@@ -17,170 +17,205 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for executive UI styling
+# Custom CSS for polished, hackathon-winning UI
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1E293B;
+        font-size: 2.3rem;
+        font-weight: 800;
+        color: #0F172A;
         margin-bottom: 0.2rem;
     }
     .sub-header {
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         color: #475569;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
     }
-    .agent-card {
+    .status-banner {
+        background: linear-gradient(90deg, #1E293B 0%, #334155 100%);
+        color: #F8FAFC;
+        padding: 12px 18px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .agent-box {
         border-radius: 10px;
-        padding: 15px;
+        padding: 16px;
         margin-bottom: 12px;
-        border-left: 5px solid #3B82F6;
+        border: 1px solid #E2E8F0;
         background-color: #F8FAFC;
     }
     .badge-hire {
         background-color: #10B981;
         color: white;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-weight: bold;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
     }
     .badge-nohire {
         background-color: #EF4444;
         color: white;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-weight: bold;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
     }
     .badge-borderline {
         background-color: #F59E0B;
         color: white;
-        padding: 4px 12px;
-        border-radius: 16px;
-        font-weight: bold;
-    }
-    .revision-box {
-        background-color: #FEF3C7;
-        border-left: 4px solid #D97706;
-        padding: 10px;
-        border-radius: 6px;
-        margin-top: 8px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- Helpers & Configuration ----------------- #
-
-def get_api_key():
-    # 1. Streamlit secrets
-    try:
-        if "GEMINI_API_KEY" in st.secrets:
-            return st.secrets["GEMINI_API_KEY"]
-        if "GOOGLE_API_KEY" in st.secrets:
-            return st.secrets["GOOGLE_API_KEY"]
-    except Exception:
-        pass
-
-    # 2. Environment variables
-    env_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if env_key:
-        return env_key
-
-    # 3. Session state / Sidebar input
-    return st.session_state.get("user_gemini_api_key", "")
-
-# Sidebar Controls
-with st.sidebar:
-    st.title("⚙️ Panel Configuration")
-    
-    # API Key Input
-    detected_key = get_api_key()
-    api_key_input = st.text_input(
-        "🔑 Gemini API Key",
-        value=detected_key if detected_key else "",
-        type="password",
-        help="Loaded automatically from secrets or .env. You can also paste your API key here directly."
-    )
-    if api_key_input:
-        st.session_state["user_gemini_api_key"] = api_key_input
-        active_api_key = api_key_input
-    else:
-        active_api_key = detected_key
-
-    if active_api_key:
-        st.success("API Key detected & active", icon="✅")
-    else:
-        st.warning("Please provide a Gemini API Key to proceed.", icon="⚠️")
-        
-    # Model Selection
-    model_choice = st.selectbox(
-        "🧠 Gemini Model",
-        options=["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "Custom"],
-        index=0
-    )
-    if model_choice == "Custom":
-        selected_model = st.text_input("Enter Model Name", value="gemini-2.5-flash")
-    else:
-        selected_model = model_choice
-        
-    st.divider()
-    st.subheader("📁 Sample Data Quick-Load")
-    load_samples = st.button("🚀 Load Hackathon Sample Dataset", use_container_width=True)
-
-# Function to extract text from PDF
-def extract_pdf_text(uploaded_file):
-    if uploaded_file is None:
-        return ""
-    try:
-        reader = PdfReader(uploaded_file)
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    except Exception as e:
-        st.error(f"Error reading PDF: {e}")
-        return ""
+# ----------------- Helper Functions ----------------- #
 
 def load_local_sample(filename):
     path = Path("sample_data") / filename
     if path.exists():
         try:
             reader = PdfReader(str(path))
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
+            return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
         except Exception:
             return ""
     return ""
 
-# Initialize session state for text areas if sample load clicked
-if load_samples:
+# Auto-initialize session state with official hackathon problem files if not already set
+if "initialized_defaults" not in st.session_state:
     st.session_state["jd_text_val"] = load_local_sample("02_Job_Description.pdf")
     st.session_state["ra_text_val"] = load_local_sample("03_Resume_A.pdf")
     st.session_state["ta_text_val"] = load_local_sample("05_Transcript_A.pdf")
     st.session_state["rb_text_val"] = load_local_sample("04_Resume_B.pdf")
     st.session_state["tb_text_val"] = load_local_sample("06_Transcript_B.pdf")
-    st.toast("Loaded sample Job Description and Candidates A & B!", icon="🎉")
+    st.session_state["initialized_defaults"] = True
 
-# LLM Caller
+def get_active_api_key():
+    # 1. Streamlit Secrets (Cloud deployment)
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+        if "GOOGLE_API_KEY" in st.secrets:
+            return st.secrets["GOOGLE_API_KEY"]
+        if "gemini_api_key" in st.secrets:
+            return st.secrets["gemini_api_key"]
+    except Exception:
+        pass
+
+    # 2. Environment Variables (.env / system)
+    env_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or os.environ.get("gemini_api_key")
+    if env_key:
+        return env_key
+
+    # 3. Session state fallback
+    return st.session_state.get("custom_api_key", "")
+
+active_api_key = get_active_api_key()
+
+# ----------------- Sidebar Configuration ----------------- #
+
+with st.sidebar:
+    st.title("⚙️ Panel Settings")
+    
+    if active_api_key:
+        st.success("🟢 API Connected & Ready", icon="✅")
+    else:
+        st.warning("⚠️ No API Key found in secrets or environment.", icon="🔑")
+    
+    # Model Selection with smart defaults
+    model_choice = st.selectbox(
+        "🧠 Gemini Model",
+        options=["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "Custom"],
+        index=0,
+        help="Primary model used for multi-agent reasoning."
+    )
+    if model_choice == "Custom":
+        selected_model = st.text_input("Custom Model Name", value="gemini-2.5-flash")
+    else:
+        selected_model = model_choice
+
+    # Optional Override Collapsible
+    with st.expander("🔑 Override API Key (Optional)", expanded=not bool(active_api_key)):
+        custom_key_input = st.text_input(
+            "Custom Gemini API Key",
+            value=st.session_state.get("custom_api_key", ""),
+            type="password",
+            help="Leave blank to use pre-configured Cloud Secret / Environment Key."
+        )
+        if custom_key_input:
+            st.session_state["custom_api_key"] = custom_key_input
+            active_api_key = custom_key_input
+
+    st.divider()
+    st.markdown("### 📂 Sample Data Controls")
+    if st.button("🔄 Reset / Reload Hackathon Dataset", use_container_width=True):
+        st.session_state["jd_text_val"] = load_local_sample("02_Job_Description.pdf")
+        st.session_state["ra_text_val"] = load_local_sample("03_Resume_A.pdf")
+        st.session_state["ta_text_val"] = load_local_sample("05_Transcript_A.pdf")
+        st.session_state["rb_text_val"] = load_local_sample("04_Resume_B.pdf")
+        st.session_state["tb_text_val"] = load_local_sample("06_Transcript_B.pdf")
+        st.toast("Reloaded official sample dataset!", icon="🚀")
+
+# ----------------- Robust LLM Caller ----------------- #
+
 def call_gemini(prompt: str, model_name: str, api_key: str) -> str:
     if not api_key:
-        raise ValueError("Missing Gemini API Key. Please provide one in the sidebar or via environment variables.")
+        raise ValueError("No Gemini API Key found. Please add GEMINI_API_KEY to Streamlit Secrets or provide it in the sidebar.")
+    
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-    response = model.generate_content(prompt)
-    return response.text if response and response.text else "No response generated."
+    
+    # Try preferred model first, with seamless fallback if model is unavailable
+    models_to_try = [model_name]
+    for fallback in ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]:
+        if fallback not in models_to_try:
+            models_to_try.append(fallback)
+            
+    last_err = None
+    for m in models_to_try:
+        try:
+            model = genai.GenerativeModel(m)
+            response = model.generate_content(prompt)
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            last_err = e
+            continue
+            
+    raise RuntimeError(f"Failed to generate response: {last_err}")
 
-# Persona Definitions
+# Extract text from uploaded PDF
+def extract_pdf_text(uploaded_file):
+    if uploaded_file is None:
+        return ""
+    try:
+        reader = PdfReader(uploaded_file)
+        return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    except Exception as e:
+        st.error(f"Error reading PDF: {e}")
+        return ""
+
+# ----------------- Persona Definitions ----------------- #
+
 AGENTS = {
     "Technical Agent": {
-        "role": "Chief Technology Officer / Senior Systems Architect",
-        "focus": "Evaluates technical depth, systems design, concurrency, agentic workflows, production reliability, and code rigor.",
+        "role": "Chief Systems Architect / Senior AI Engineer",
+        "focus": "Evaluates technical depth, concurrency, agentic workflows, production reliability, error-handling, and code rigor.",
         "icon": "💻"
     },
     "HR / Culture Agent": {
         "role": "Head of People & Organizational Culture",
-        "focus": "Evaluates communication clarity, collaborative spirit, honesty, self-awareness, stress handling, and values alignment.",
+        "focus": "Evaluates communication clarity, teamwork, honesty, self-awareness, handling pressure, and values alignment.",
         "icon": "🤝"
     },
     "Hiring Manager Agent": {
         "role": "VP of Engineering & Freight Ops Lead",
-        "focus": "Evaluates business ROI, role fit against job description requirements, ownership mindset, and delivery speed.",
+        "focus": "Evaluates business ROI, role fit against job description requirements, ownership mindset, and delivery velocity.",
         "icon": "📈"
     },
     "Skeptic Agent": {
@@ -199,18 +234,17 @@ EVALUATION RULES (MANDATORY):
 
 # Voice Debate Simulation Generator (Web Speech API)
 def render_voice_debate_player(debate_text, candidate_name):
-    # Escape single quotes and newlines for JS embedding
-    clean_text = debate_text.replace("`", "'").replace('"', '\\"')
+    clean_text = debate_text.replace("`", "'").replace('"', '\\"').replace("\n", "\\n")
     html_code = f"""
     <div style="background-color: #1E293B; color: #F8FAFC; padding: 18px; border-radius: 10px; margin-top: 15px; margin-bottom: 20px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
             <h4 style="margin: 0; color: #60A5FA;">🎙️ Live AI Multi-Persona Voice Debate Simulation ({candidate_name})</h4>
             <div>
                 <button onclick="playDebate_{candidate_name}()" style="background: #10B981; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-right: 6px;">▶ Play Debate</button>
                 <button onclick="stopDebate()" style="background: #EF4444; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600;">⏹ Stop</button>
             </div>
         </div>
-        <p style="font-size: 0.85rem; color: #94A3B8; margin: 0;">Click Play to hear the 4 AI agent personas debate using distinct synthesized voices.</p>
+        <p style="font-size: 0.85rem; color: #94A3B8; margin: 0;">Click Play to hear the 4 AI agent personas debate using distinct synthesized voice timbres.</p>
         <div id="status_{candidate_name}" style="font-size: 0.85rem; color: #38BDF8; margin-top: 8px; min-height: 20px;"></div>
     </div>
     
@@ -230,13 +264,12 @@ def render_voice_debate_player(debate_text, candidate_name):
         }}
         window.speechSynthesis.cancel();
         
-        var rawText = `{clean_text}`;
+        var rawText = "{clean_text}";
         var lines = rawText.split('\\n');
-        var voices = window.speechSynthesis.getVoices();
         
         var agentVoiceSettings = {{
             'Technical Agent': {{ pitch: 0.9, rate: 1.05 }},
-            'HR / Culture Agent': {{ pitch: 1.2, rate: 0.95 }},
+            'HR / Culture Agent': {{ pitch: 1.25, rate: 0.95 }},
             'Hiring Manager Agent': {{ pitch: 1.0, rate: 1.0 }},
             'Skeptic Agent': {{ pitch: 0.75, rate: 1.1 }}
         }};
@@ -283,15 +316,16 @@ def render_voice_debate_player(debate_text, candidate_name):
     }}
     </script>
     """
-    st.components.v1.html(html_code, height=140)
+    st.components.v1.html(html_code, height=135)
 
-# Main Processing Pipeline for a Single Candidate
+# ----------------- Core Multi-Agent Pipeline ----------------- #
+
 def evaluate_candidate(name: str, job_desc: str, resume: str, transcript: str, model_name: str, api_key: str):
     st.markdown(f"## 👤 Evaluation for Candidate: **{name}**")
     
     # 1. Candidate Profile Builder
     with st.status(f"🛠️ Step 1: Building Candidate Profile for {name}...", expanded=True) as status_profile:
-        st.write("Synthesizing core skills, verified experience, timeline, and claimed achievements...")
+        st.write("Extracting structured competencies, timeline, and verified claims from documents...")
         profile_prompt = f"""
 You are the Candidate Profile Builder. Your mission is to extract an objective, structured factual dossier from the candidate's resume and interview transcript against the Job Description.
 
@@ -452,7 +486,7 @@ Deliver the final executive report with these exact sections:
         "final_decision": final_decision
     }
 
-# Comparison Matrix Generator for Candidates A and B
+# Head-to-Head Comparison Matrix Generator
 def generate_comparison_matrix(res_a, res_b, job_desc, model_name, api_key):
     st.markdown("---")
     st.markdown("## 🏆 Candidate Comparison: Head-to-Head (Candidate A vs Candidate B)")
@@ -485,19 +519,28 @@ Provide a clear Head-to-Head Comparison:
     st.markdown(comparison)
     return comparison
 
-# ----------------- UI Layout & Workflow ----------------- #
+# ----------------- Main UI Layout ----------------- #
 
 st.markdown('<div class="main-header">🎙️ Multi-Agent AI Interview Panel Simulator</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Collaborative multi-persona panel with blind independent reviews, adversarial debate, evidence weighting, and voice simulation.</div>', unsafe_allow_html=True)
 
-# Tabs for Input & Controls
-tab_input, tab_panel = st.tabs(["📝 1. Input Materials & Documents", "🤖 2. Multi-Agent Simulation"])
+# Banner confirming status
+if active_api_key:
+    st.markdown("""
+    <div class="status-banner">
+        <div>⚡ <b>Status</b>: System is fully initialized with official hackathon dataset. Ready to evaluate.</div>
+        <div><span style="background: #10B981; padding: 4px 10px; border-radius: 12px; font-size: 0.85rem; font-weight: 600;">API Ready</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Tabs
+tab_input, tab_panel = st.tabs(["📝 1. Documents & Candidate Materials", "🤖 2. Multi-Agent Simulation"])
 
 with tab_input:
     st.subheader("1. Job Description")
     col_jd1, col_jd2 = st.columns([1, 2])
     with col_jd1:
-        jd_file = st.file_uploader("Upload Job Description PDF", type=["pdf"], key="jd_upload")
+        jd_file = st.file_uploader("Upload Custom Job Description PDF", type=["pdf"], key="jd_upload")
     with col_jd2:
         jd_text_default = st.session_state.get("jd_text_val", "")
         jd_text = st.text_area("Job Description Text", value=jd_text_default, height=140, placeholder="Paste or load Job Description text here...", key="jd_input_box")
@@ -509,26 +552,27 @@ with tab_input:
     
     with col_a:
         st.markdown("### 🅰️ Candidate A")
-        ra_file = st.file_uploader("Resume A (PDF)", type=["pdf"], key="ra_upload")
+        ra_file = st.file_uploader("Upload Resume A (PDF)", type=["pdf"], key="ra_upload")
         ra_text_default = st.session_state.get("ra_text_val", "")
         ra_text = st.text_area("Resume A Text", value=ra_text_default, height=120, placeholder="Paste Resume A text...", key="ra_input_box")
         
-        ta_file = st.file_uploader("Interview Transcript A (PDF)", type=["pdf"], key="ta_upload")
+        ta_file = st.file_uploader("Upload Transcript A (PDF)", type=["pdf"], key="ta_upload")
         ta_text_default = st.session_state.get("ta_text_val", "")
         ta_text = st.text_area("Transcript A Text", value=ta_text_default, height=140, placeholder="Paste Transcript A text...", key="ta_input_box")
 
     with col_b:
         st.markdown("### 🅱️ Candidate B")
-        rb_file = st.file_uploader("Resume B (PDF)", type=["pdf"], key="rb_upload")
+        rb_file = st.file_uploader("Upload Resume B (PDF)", type=["pdf"], key="rb_upload")
         rb_text_default = st.session_state.get("rb_text_val", "")
         rb_text = st.text_area("Resume B Text", value=rb_text_default, height=120, placeholder="Paste Resume B text...", key="rb_input_box")
         
-        tb_file = st.file_uploader("Interview Transcript B (PDF)", type=["pdf"], key="tb_upload")
+        tb_file = st.file_uploader("Upload Transcript B (PDF)", type=["pdf"], key="tb_upload")
         tb_text_default = st.session_state.get("tb_text_val", "")
         tb_text = st.text_area("Transcript B Text", value=tb_text_default, height=140, placeholder="Paste Transcript B text...", key="tb_input_box")
 
 with tab_panel:
-    st.subheader("🚀 Run Multi-Agent Panel Simulation")
+    st.subheader("🚀 Live Multi-Agent Simulation")
+    st.write("Run the full 4-persona panel, observe the independent blind scoring, listen to the debate, and inspect the final evidence-weighed decisions.")
     
     run_btn = st.button("🔥 Start Multi-Agent Panel Evaluation (Candidates A & B)", type="primary", use_container_width=True)
 
@@ -542,9 +586,9 @@ with tab_panel:
 
         # Validate inputs
         if not active_api_key:
-            st.error("❌ Missing Gemini API Key! Please enter it in the sidebar or configure GEMINI_API_KEY.", icon="🚨")
+            st.error("❌ Missing Gemini API Key! Please ensure GEMINI_API_KEY is configured in Streamlit Secrets or in the sidebar.", icon="🚨")
         elif not final_jd:
-            st.error("❌ Please provide the Job Description (upload PDF or paste text).", icon="🚨")
+            st.error("❌ Please provide the Job Description.", icon="🚨")
         elif not (final_ra and final_ta):
             st.error("❌ Please provide Candidate A's Resume and Interview Transcript.", icon="🚨")
         else:
