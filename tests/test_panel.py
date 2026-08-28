@@ -1,5 +1,4 @@
 ﻿import pytest
-import os
 from pathlib import Path
 from pypdf import PdfReader
 
@@ -28,7 +27,14 @@ def test_pdf_extraction():
     assert len(text) > 100, "Extracted PDF text is too short"
     assert "Job Description" in text or "AI Engineer" in text, "Unexpected PDF content"
 
-def test_agent_definitions():
+def test_all_sample_pdfs_readable():
+    """Ensure all sample PDFs can be extracted without exceptions."""
+    for filename in ["03_Resume_A.pdf", "04_Resume_B.pdf", "05_Transcript_A.pdf", "06_Transcript_B.pdf"]:
+        reader = PdfReader(str(Path("sample_data") / filename))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+        assert len(text) > 50, f"Failed to extract meaningful text from {filename}"
+
+def test_agent_definitions_completeness():
     """Verify all 4 required personas are configured with proper specifications."""
     expected_agents = ["Technical Agent", "HR / Culture Agent", "Hiring Manager Agent", "Skeptic Agent"]
     for agent in expected_agents:

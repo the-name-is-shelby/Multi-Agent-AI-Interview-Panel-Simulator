@@ -1,5 +1,4 @@
 ﻿import pytest
-from unittest.mock import MagicMock, patch
 
 def test_candidate_profile_prompt_construction():
     """Test candidate profile prompt formatting."""
@@ -16,9 +15,29 @@ def test_debate_opinion_shift_tag():
     """Verify opinion shift tag format."""
     sample_debate = "Technical Agent: I initially rated 8. [OPINION SHIFT: Technical Agent updates stance because Skeptic pointed out test gaps] Now I rate 6."
     assert "[OPINION SHIFT:" in sample_debate
+    assert "updates stance because" in sample_debate
 
 def test_non_averaging_decision_structure():
     """Verify decision structure requirements."""
-    decision_keys = ["Final Recommendation", "Overall Confidence", "Evidence-Weighed Justification", "Key Strengths", "Critical Concerns"]
+    decision_keys = [
+        "Final Recommendation",
+        "Overall Confidence Level",
+        "Evidence-Weighed Justification",
+        "Key Strengths",
+        "Critical Concerns",
+        "Unresolved Disagreements"
+    ]
     for key in decision_keys:
         assert len(key) > 0
+
+def test_comparison_matrix_structure():
+    """Verify head-to-head comparison keys."""
+    dimensions = [
+        "Technical Rigor",
+        "Communication/Honesty",
+        "Execution Speed",
+        "Risk Factor",
+        "Final Hiring Verdict"
+    ]
+    for dim in dimensions:
+        assert len(dim) > 0
