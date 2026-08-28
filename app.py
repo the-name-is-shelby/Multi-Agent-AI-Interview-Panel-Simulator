@@ -6,16 +6,16 @@ from pathlib import Path
 from pypdf import PdfReader
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load local environment variables (.env)
 load_dotenv()
 
 st.set_page_config(
     page_title="Multi-Agent AI Interview Panel Simulator",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Helper to load sample files on explicit request
+# Helper to load sample files
 def load_sample_file(filename):
     path = Path("sample_data") / filename
     if path.exists():
@@ -26,8 +26,8 @@ def load_sample_file(filename):
             return ""
     return ""
 
-# Detect API Key from secrets or env
-def get_env_key():
+# Auto-detect API key from secrets or env
+def get_api_key():
     try:
         if "GEMINI_API_KEY" in st.secrets:
             return st.secrets["GEMINI_API_KEY"]
@@ -37,25 +37,9 @@ def get_env_key():
         pass
     return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
 
-env_key = get_env_key()
+API_KEY = get_api_key()
 
-# Sidebar
-with st.sidebar:
-    st.header("Configuration")
-    api_key = st.text_input("Gemini API Key", value=env_key, type="password", help="Loaded automatically from secrets or .env if available.")
-    model_name = st.selectbox("Model", ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"], index=0)
-    
-    st.markdown("---")
-    st.subheader("Sample Data")
-    if st.button("Load Official Sample Dataset", use_container_width=True):
-        st.session_state["jd_input"] = load_sample_file("02_Job_Description.pdf")
-        st.session_state["ra_input"] = load_sample_file("03_Resume_A.pdf")
-        st.session_state["ta_input"] = load_sample_file("05_Transcript_A.pdf")
-        st.session_state["rb_input"] = load_sample_file("04_Resume_B.pdf")
-        st.session_state["tb_input"] = load_sample_file("06_Transcript_B.pdf")
-        st.rerun()
-
-# Extract PDF helper
+# Extract PDF text helper
 def extract_pdf(uploaded_file):
     if uploaded_file is None:
         return ""
@@ -63,16 +47,17 @@ def extract_pdf(uploaded_file):
         reader = PdfReader(uploaded_file)
         return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
     except Exception as e:
-        st.error(f"Error parsing PDF: {e}")
+        st.error(f"Error reading PDF: {e}")
         return ""
 
 # LLM Caller with fallback
-def call_gemini(prompt: str, model_choice: str, key: str) -> str:
+def call_gemini(prompt: str, model_name: str = "gemini-2.5-flash") -> str:
+    key = get_api_key()
     if not key:
-        raise ValueError("Please provide a valid Gemini API Key in the sidebar or Streamlit secrets.")
+        raise ValueError("API Key is missing from secrets/environment.")
     genai.configure(api_key=key)
     
-    fallbacks = [model_choice, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+    fallbacks = [model_name, "gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
     seen = set()
     last_err = None
     for m in fallbacks:
@@ -103,7 +88,7 @@ MANDATORY RULES:
 2. MISSING DATA: If there is not enough information to judge something, explicitly state "INSUFFICIENT INFORMATION" instead of making up a score.
 """
 
-def run_panel_for_candidate(name, jd, resume, transcript, model_choice, key):
+def run_panel_for_candidate(name, jd, resume, transcript):
     st.markdown(f"## Candidate {name} Evaluation")
     
     # 1. Candidate Profile Builder
@@ -118,7 +103,7 @@ Output sections:
 2. Core Technical Skills (Demonstrated vs Claimed)
 3. Verified Metrics & Key Projects
 4. Ambiguities / Unverified Claims"""
-        profile = call_gemini(profile_prompt, model_choice, key)
+        profile = call_gemini(profile_prompt)
 
     with st.expander(f"Candidate {name} — Shared Fact Profile", expanded=False):
         st.markdown(profile)
@@ -146,7 +131,7 @@ Provide:
 - Key Direct Evidence Quotes (from transcript/resume)
 - Primary Assessment & Strengths
 - Risks & Concerns"""
-                opinion = call_gemini(agent_prompt, model_choice, key)
+                opinion = call_gemini(agent_prompt)
                 opinions[agent_name] = opinion
             with st.expander("View Evaluation", expanded=True):
                 st.markdown(opinion)
@@ -165,7 +150,7 @@ Rules:
 3. Show at least one moment where an agent explicitly changes/updates their opinion or score based on another agent's point.
 4. Mark opinion changes explicitly with: [OPINION SHIFT: <Agent> updates stance because <reason>]
 Write as a dialogue transcript, ending with a short summary of shifts."""
-        debate = call_gemini(debate_prompt, model_choice, key)
+        debate = call_gemini(debate_prompt)
 
     st.markdown(debate)
 
@@ -186,14 +171,14 @@ Provide:
 4. Key Strengths (with verbatim quotes)
 5. Critical Concerns / Red Flags (with verbatim quotes)
 6. Unresolved Disagreements between agents"""
-        decision = call_gemini(final_prompt, model_choice, key)
+        decision = call_gemini(final_prompt)
 
     st.success(f"Final Decision for Candidate {name} Ready")
     st.markdown(decision)
     
     return {"profile": profile, "opinions": opinions, "debate": debate, "decision": decision}
 
-def run_comparison(res_a, res_b, jd, model_choice, key):
+def run_comparison(res_a, res_b, jd):
     st.markdown("## Head-to-Head Comparison: Candidate A vs Candidate B")
     with st.spinner("Generating comparative analysis..."):
         comp_prompt = f"""Compare Candidate A and Candidate B for the role described in the Job Description.
@@ -205,17 +190,28 @@ Provide:
 1. Comparison Matrix Table (Dimensions: Technical Rigor, Communication/Honesty, Execution Speed, Risk Factor, Winner)
 2. Core Trade-off Analysis
 3. Final Hiring Verdict & Ranking (1st and 2nd place with clear reasoning)"""
-        comparison = call_gemini(comp_prompt, model_choice, key)
+        comparison = call_gemini(comp_prompt)
     st.markdown(comparison)
 
-# ----------------- Main Page ----------------- #
+# ----------------- UI Layout ----------------- #
 
 st.title("Multi-Agent AI Interview Panel Simulator")
 st.caption("Autonomous hiring panel simulator with blind evaluations, adversarial multi-agent debate, evidence weighting, and candidate comparison.")
 
-# Inputs Section
+# Sidebar for sample loader only
+with st.sidebar:
+    st.header("Actions")
+    if st.button("Load Hackathon Sample Files", use_container_width=True):
+        st.session_state["jd_input"] = load_sample_file("02_Job_Description.pdf")
+        st.session_state["ra_input"] = load_sample_file("03_Resume_A.pdf")
+        st.session_state["ta_input"] = load_sample_file("05_Transcript_A.pdf")
+        st.session_state["rb_input"] = load_sample_file("04_Resume_B.pdf")
+        st.session_state["tb_input"] = load_sample_file("06_Transcript_B.pdf")
+        st.rerun()
+
+# Document Inputs
 st.subheader("Job Description")
-jd_upload = st.file_uploader("Upload Job Description PDF", type=["pdf"], key="jd_up")
+jd_upload = st.file_uploader("Upload Job Description (PDF)", type=["pdf"], key="jd_up")
 jd_val = extract_pdf(jd_upload) or st.text_area("Job Description Text", value=st.session_state.get("jd_input", ""), height=120, placeholder="Paste Job Description or upload PDF above...")
 
 st.markdown("---")
@@ -239,22 +235,20 @@ with col_b:
 
 st.markdown("---")
 
-# Execution Button right on the page
+# Execution Button
 if st.button("Run Multi-Agent Panel Evaluation", type="primary", use_container_width=True):
-    if not api_key:
-        st.error("Please enter a Gemini API Key in the sidebar or set GEMINI_API_KEY in Streamlit Secrets.")
-    elif not jd_val or not ra_val or not ta_val:
-        st.error("Please ensure the Job Description and Candidate A materials (Resume + Transcript) are provided.")
+    if not jd_val or not ra_val or not ta_val:
+        st.error("Please provide the Job Description and Candidate A documents (Resume + Transcript).")
     else:
         try:
             st.markdown("---")
-            res_a = run_panel_for_candidate("A", jd_val, ra_val, ta_val, model_name, api_key)
+            res_a = run_panel_for_candidate("A", jd_val, ra_val, ta_val)
             
             if rb_val and tb_val:
                 st.markdown("---")
-                res_b = run_panel_for_candidate("B", jd_val, rb_val, tb_val, model_name, api_key)
+                res_b = run_panel_for_candidate("B", jd_val, rb_val, tb_val)
                 st.markdown("---")
-                run_comparison(res_a, res_b, jd_val, model_name, api_key)
+                run_comparison(res_a, res_b, jd_val)
                 
             st.balloons()
             st.success("Evaluation Completed Successfully!")
